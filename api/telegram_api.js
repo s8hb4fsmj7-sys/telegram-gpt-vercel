@@ -5,64 +5,61 @@ export default async function handler(req, res) {
     return res.status(405).send("Method Not Allowed");
   }
 
-  // 1) Знімаємо оновлення від Telegram
+  const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+  const OPENAI_KEY = process.env.OPENAI_API_KEY;
+
   const body = req.body || {};
   const chatId = body.message?.chat?.id;
-  const userMessage = (body.message?.text || "").trim();
+  const text = (body.message?.text || "").trim();
 
-  // Telegram інколи шле сервісні апдейти без message/chat
-  if (!chatId) return res.status(200).send("OK");
+  if (!chatId) {
+    return res.status(200).send("OK");
+  }
 
-  let replyText = "🤖";
+  let reply = "🤖";
 
-  if (userMessage) {
-    // 2) Питаємо OpenAI
+  if (text) {
     try {
+      // 🕒 затримка 1 секунда — щоб уникнути помилки 429
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // 🔹 запит до OpenAI
       const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Authorization": `Bearer ${OPENAI_KEY}`,
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          messages: [{ role: "user", content: userMessage }],
-          temperature: 0.7
+          messages: [{ role: "user", content: text }],
+          temperature: 0.7,
         }),
       });
 
-      if (!aiResponse.ok) {
-        const errText = await aiResponse.text();
-        console.error("OpenAI HTTP error:", aiResponse.status, errText);
-        replyText = `⚠️ OpenAI error ${aiResponse.status}`;
+      const data = await aiResponse.json();
+
+      if (data.error) {
+        reply = `⚠️ OpenAI error: ${data.error.message}`;
       } else {
-        const data = await aiResponse.json();
-        replyText =
-          data?.choices?.[0]?.message?.content?.trim() ||
-          "⚠️ No reply from AI.";
+        reply = data.choices?.[0]?.message?.content?.trim() || "😶 Немає відповіді.";
       }
+
     } catch (e) {
-      console.error("OpenAI fetch failed:", e);
-      replyText = "⚠️ Error connecting to OpenAI.";
+      console.error("OpenAI error:", e);
+      reply = `⚠️ Error connecting to OpenAI: ${e.message}`;
     }
-  } else {
-    replyText = "Напиши мені повідомлення 🙂";
   }
 
-  // 3) Відповідаємо у Telegram
-  try {
-    await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: replyText,
-      }),
-    });
-  } catch (e) {
-    console.error("Telegram send error:", e);
-  }
+  // 🔹 надсилаємо відповідь у Telegram
+  await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: reply,
+    }),
+  });
 
-  // 4) Віддаємо 200 одразу, щоб Telegram був щасливий
-  return res.status(200).send("OK");
+  res.status(200).send("OK");
 }
