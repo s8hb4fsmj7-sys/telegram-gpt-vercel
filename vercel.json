@@ -1,9 +1,9 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "api/telegram_api.js", "use": "@vercel/node" }
-  ],
+  "functions": {
+    "api/**/*.js": { "runtime": "nodejs22.x" }
+  },
   "routes": [
-    { "src": "/(.*)", "dest": "api/telegram_api.js" }
+    { "src": "/api/(.*)", "dest": "/api/$1" }
   ]
 }
