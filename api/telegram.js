@@ -13,7 +13,6 @@ export default async function handler(req, res) {
   const text = (body.message?.text || "").trim();
 
   if (!chatId) {
-    // немає коректного повідомлення — віддаємо OK
     return res.status(200).send("OK");
   }
 
@@ -21,6 +20,10 @@ export default async function handler(req, res) {
 
   if (text) {
     try {
+      // 🕒 затримка 1 секунда — щоб уникнути помилки 429
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // 🔹 запит до OpenAI
       const aiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -35,22 +38,28 @@ export default async function handler(req, res) {
       });
 
       const data = await aiResponse.json();
-      reply = data.choices?.[0]?.message?.content?.trim() || "⚠️ No response from AI.";
+
+      if (data.error) {
+        reply = `⚠️ OpenAI error: ${data.error.message}`;
+      } else {
+        reply = data.choices?.[0]?.message?.content?.trim() || "😶 Немає відповіді.";
+      }
+
     } catch (e) {
       console.error("OpenAI error:", e);
-      reply = "⚠️ Error connecting to OpenAI.";
+      reply = `⚠️ Error connecting to OpenAI: ${e.message}`;
     }
   }
 
-  try {
-    await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text: reply }),
-    });
-  } catch (e) {
-    console.error("Telegram error:", e);
-  }
+  // 🔹 надсилаємо відповідь у Telegram
+  await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: reply,
+    }),
+  });
 
-  return res.status(200).send("OK");
+  res.status(200).send("OK");
 }
