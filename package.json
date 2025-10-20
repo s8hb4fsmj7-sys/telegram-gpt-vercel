@@ -1,12 +1,7 @@
 {
   "name": "telegram-gpt-vercel",
-  "version": "1.0.0",
-  "main": "api/telegram_api.js",
+  "private": true,
   "type": "module",
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
-  "scripts": {
-    "start": "node api/telegram_api.js"
-  }
+  "engines": { "node": "18.x" },
+  "dependencies": {}
 }
